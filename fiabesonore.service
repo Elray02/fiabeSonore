@@ -1,0 +1,27 @@
+[Unit]
+Description=fiabeSonore RFID media player
+After=graphical.target sound.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=r
+WorkingDirectory=/home/r/cantaStorie/Desktop/fiabeSonore
+# DISPLAY/XAUTHORITY are needed so VLC can open a window on the desktop
+# session. Adjust :0 / the .Xauthority path if your setup differs.
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/r/.Xauthority
+ExecStart=/usr/bin/python3 /home/r/cantaStorie/Desktop/fiabeSonore/rfidReader.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target
+
+# Install with:
+#   sudo cp fiabesonore.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now fiabesonore
+# Logs:
+#   journalctl -u fiabesonore -f
+# The user (r) must be in the `spi` and `gpio` groups for the RFID reader.

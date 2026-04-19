@@ -1,0 +1,4 @@
+pygame
+mfrc522
+RPi.GPIO
+python-vlc
