@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Protocol
 
 import pygame
 import vlc
@@ -26,6 +26,13 @@ VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".webm"}
 
 DEBOUNCE_SECONDS = 2.0
 POLL_INTERVAL = 0.1
+
+
+class MediaPlayer(Protocol):
+    def play(self, filepath: Path) -> None: ...
+    def stop(self) -> None: ...
+    def is_playing(self) -> bool: ...
+    def shutdown(self) -> None: ...
 
 
 def hdmi_power(on: bool) -> None:
@@ -117,7 +124,7 @@ class RFIDMediaPlayer:
         self.reader = SimpleMFRC522()
         self.audio = AudioPlayer()
         self.video = VideoPlayer()
-        self.active: Optional[object] = None
+        self.active: Optional[MediaPlayer] = None
 
         hdmi_power(False)  # start with HDMI off; video player turns it on
         self._announce()
@@ -128,7 +135,7 @@ class RFIDMediaPlayer:
         for name in files:
             print(f"  - {name}")
 
-    def _player_for(self, filepath: Path) -> Optional[object]:
+    def _player_for(self, filepath: Path) -> Optional[MediaPlayer]:
         ext = filepath.suffix.lower()
         if ext in AUDIO_EXTS:
             return self.audio
