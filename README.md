@@ -285,3 +285,5 @@ fiabeSonore/
 ## Dev-machine note
 
 `RPi.GPIO`, `mfrc522`, `python-vlc`, and `vcgencmd` are Pi-specific. Importing `rfidReader.py` on a non-Pi machine will fail at the hardware imports. Testing is done on the actual device. The `vcgencmd` HDMI shim silently no-ops if the binary is absent, so other parts of the code are safe to read on any machine.
+
+
