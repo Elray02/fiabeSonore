@@ -11,7 +11,7 @@ WorkingDirectory=/home/r/cantaStorie/Desktop/fiabeSonore
 # session. Adjust :0 / the .Xauthority path if your setup differs.
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/r/.Xauthority
-ExecStart=/usr/bin/python3 /home/r/cantaStorie/Desktop/fiabeSonore/rfidReader.py
+ExecStart=/home/r/cantaStorie/Desktop/fiabeSonore/.venv/bin/python3 /home/r/cantaStorie/Desktop/fiabeSonore/rfidReader.py
 Restart=on-failure
 RestartSec=5
 
@@ -25,3 +25,5 @@ WantedBy=graphical.target
 # Logs:
 #   journalctl -u fiabesonore -f
 # The user (r) must be in the `spi` and `gpio` groups for the RFID reader.
+# ExecStart punta al venv creato da setup.sh (.venv/bin/python3). Se cambi
+# il percorso di deploy, aggiorna anche WorkingDirectory ed ExecStart.
