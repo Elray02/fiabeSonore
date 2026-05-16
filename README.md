@@ -23,59 +23,195 @@ Tap card  →  read payload ("cappuccetto-rosso.mp3")
 | Audio output | 3.5 mm jack |
 | Video output | HDMI display |
 
-## Requirements
+### Wiring (MFRC522 → Pi 3B GPIO)
 
-**System packages** (install with `apt`):
+Standard SPI0 pinout used by the `mfrc522` Python library:
 
+| MFRC522 pin | Pi pin (BCM) | Pi physical pin |
+|---|---|---|
+| SDA  | GPIO 8 (CE0)  | 24 |
+| SCK  | GPIO 11 (SCLK)| 23 |
+| MOSI | GPIO 10       | 19 |
+| MISO | GPIO 9        | 21 |
+| IRQ  | — (not used)  | — |
+| GND  | GND           | 6  |
+| RST  | GPIO 25       | 22 |
+| 3.3V | 3.3V          | 1  |
+
+> **Do not connect the MFRC522 to 5V** — it is a 3.3 V device and will be damaged.
+
+---
+
+## Setup on Raspberry Pi 3B (Raspbian)
+
+The steps below take a fresh Raspbian install to a working autostart deployment.
+
+### 1. Install Raspbian
+
+Flash **Raspberry Pi OS** (Raspbian) to an SD card with the official Raspberry Pi Imager. Use the **"with desktop"** image — video playback needs a graphical session.
+
+On first boot, complete the setup wizard, connect to Wi-Fi (only needed for installing packages — runtime is fully offline), and then update the system:
+
+```bash
+sudo apt update
+sudo apt full-upgrade -y
+sudo reboot
 ```
-vlc
+
+### 2. Enable SPI and add the user to the right groups
+
+The MFRC522 reader talks to the Pi over SPI, which is disabled by default.
+
+```bash
+sudo raspi-config
 ```
 
-**Python packages** (install with `pip`):
+- → **Interface Options** → **SPI** → **Yes**
+- Exit and reboot.
 
+Add your user (the one that will run the player) to the `spi` and `gpio` groups:
+
+```bash
+sudo usermod -aG spi,gpio $USER
 ```
+
+Log out and back in (or reboot) for the group change to take effect. Verify with `groups` — both `spi` and `gpio` should appear.
+
+### 3. Install system packages
+
+```bash
+sudo apt install -y python3-pip git vlc
+```
+
+- `vlc` — required for video playback (the `python-vlc` library is a thin binding around it).
+- `git` — to clone the repo.
+- `python3-pip` — to install the Python dependencies.
+
+### 4. Configure audio output
+
+Force audio out the 3.5 mm jack (not HDMI):
+
+```bash
+sudo raspi-config
+```
+
+- → **System Options** → **Audio** → **Headphones / 3.5mm jack**
+
+Test it:
+
+```bash
+speaker-test -t sine -f 440 -c 2 -s 1
+```
+
+You should hear a beep. Adjust volume with `alsamixer` if needed.
+
+### 5. Clone the repo and install Python dependencies
+
+```bash
+cd ~
+git clone <your-repo-url> fiabeSonore
+cd fiabeSonore
 pip install -r requirements.txt
 ```
+
+This installs:
 
 - `pygame` — audio playback
 - `mfrc522` — RFID reader driver
 - `RPi.GPIO` — GPIO access
 - `python-vlc` — video playback
 
-**Pi configuration:**
+### 6. Configure `base_path`
 
-- SPI must be enabled: `sudo raspi-config` → Interface Options → SPI
-- The run user must be in the `spi` and `gpio` groups:
-  ```
-  sudo usermod -aG spi,gpio <your-user>
-  ```
+Edit `config.json` to point at the directory where your media files will live:
 
-## Setup
-
-1. Clone the repo and `cd` into it.
-2. Edit `config.json` to point `base_path` at the directory where your media files live:
-   ```json
-   { "base_path": "/home/r/media/fiabe" }
-   ```
-3. Drop your `.mp3`, `.mp4`, etc. files into that directory.
-4. Program a card for each file (see below).
-
-## Running
-
-**Start the player:**
-
-```bash
-python3 rfidReader.py
+```json
+{ "base_path": "/home/pi/media" }
 ```
 
-**Program a card** (write a filename onto a card's NFC memory):
+Then create that directory and drop your `.mp3`, `.mp4`, etc. files into it:
+
+```bash
+mkdir -p /home/pi/media
+cp /path/to/your/fairy-tales/*.mp3 /home/pi/media/
+```
+
+### 7. Smoke-test the hardware
+
+Before wiring up autostart, confirm everything works manually.
+
+```bash
+python3 basicTest.py    # tap a card — should print its ID and any stored payload
+python3 playSound.py    # verify audio output (Ctrl+C to stop)
+python3 rfidReader.py   # the real player — Ctrl+C to stop
+```
+
+### 8. Program your cards
+
+For each fairy tale, write its filename onto a blank card:
 
 ```bash
 python3 program_card.py                   # list available files
-python3 program_card.py cappuccetto.mp3   # write filename to a presented card
+python3 program_card.py cappuccetto.mp3   # tap a card to write
 ```
 
-After running the write command, hold the card near the reader and keep it still until the confirmation message appears.
+---
+
+## Running automatically on boot
+
+The included `fiabesonore.service` is a systemd unit that starts the player after the graphical desktop is up (needed so VLC can open a fullscreen window).
+
+### 1. Enable desktop auto-login
+
+The service depends on a running desktop session for `DISPLAY=:0`. Configure the Pi to boot straight into the desktop without a login prompt:
+
+```bash
+sudo raspi-config
+```
+
+- → **System Options** → **Boot / Auto Login** → **Desktop Autologin**
+
+### 2. Edit the service file for your user and path
+
+`fiabesonore.service` is hardcoded for user `r` and path `/home/r/cantaStorie/Desktop/fiabeSonore`. Adjust both before installing:
+
+```ini
+User=pi
+WorkingDirectory=/home/pi/fiabeSonore
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStart=/usr/bin/python3 /home/pi/fiabeSonore/rfidReader.py
+```
+
+Replace `pi` and the path with whatever your user and clone location actually are.
+
+### 3. Install and enable
+
+```bash
+sudo cp fiabesonore.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fiabesonore
+```
+
+Reboot to confirm it starts on its own:
+
+```bash
+sudo reboot
+```
+
+After the desktop loads, tap a programmed card — the audio or video should play.
+
+### 4. Useful service commands
+
+```bash
+sudo systemctl status fiabesonore     # is it running?
+sudo systemctl restart fiabesonore    # restart after changing code
+sudo systemctl stop fiabesonore       # stop temporarily
+sudo systemctl disable fiabesonore    # turn off autostart
+journalctl -u fiabesonore -f          # tail live logs
+journalctl -u fiabesonore -b          # logs since last boot
+```
+
+---
 
 ## Adding a new fairy tale
 
@@ -100,31 +236,6 @@ Dispatch is by file extension only.
 - **Unknown filename** → warning naming the missing file.
 - **HDMI** → blanked automatically when no video is playing to save power; re-enabled before a video starts.
 
-## Hardware smoke tests
-
-```bash
-python3 basicTest.py   # read one card, print its ID and stored payload, exit
-python3 playSound.py   # loop a test MP3 via pygame — verifies audio output
-```
-
-## Autostart with systemd
-
-Install `fiabesonore.service` to run the player automatically on boot:
-
-```bash
-sudo cp fiabesonore.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now fiabesonore
-```
-
-View logs:
-
-```bash
-journalctl -u fiabesonore -f
-```
-
-> **Note:** The service file is hardcoded for user `r` and path `/home/r/cantaStorie/Desktop/fiabeSonore`. Edit it to match your setup before installing.
-
 ## File layout
 
 ```
@@ -142,6 +253,17 @@ fiabeSonore/
 ## Security
 
 `rfidReader.py` validates every card payload before touching the filesystem: empty payloads, path separators (`/`, `\`), and `..` sequences are rejected, and the resolved path is checked to stay inside `base_path`. A maliciously-programmed card cannot escape the media directory.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| `ImportError: No module named RPi.GPIO` | Not running on a Pi, or dependencies not installed. Run `pip install -r requirements.txt`. |
+| `No such file or directory: '/dev/spidev0.0'` | SPI not enabled. Run `sudo raspi-config` → Interface Options → SPI. |
+| `PermissionError` on the reader | User not in `spi` / `gpio` groups. Add them with `usermod -aG spi,gpio $USER` and log out/in. |
+| Service runs but no video window | Desktop autologin not enabled, or `DISPLAY` / `XAUTHORITY` in the unit file don't match your user. |
+| No audio | Wrong output device. Run `sudo raspi-config` → System Options → Audio → 3.5 mm jack. Check volume with `alsamixer`. |
+| Card reads always empty | Card has not been programmed yet. Use `python3 program_card.py <filename>`. |
 
 ## Dev-machine note
 
