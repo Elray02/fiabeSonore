@@ -111,15 +111,29 @@ You should hear a beep. Adjust volume with `alsamixer` if needed.
 cd ~
 git clone <your-repo-url> fiabeSonore
 cd fiabeSonore
-pip install -r requirements.txt
+./setup.sh
 ```
 
-This installs:
+`setup.sh` handles everything: installs the apt packages, enables SPI, adds you to the `spi` / `gpio` groups, creates a `.venv/` virtualenv, installs the Python deps inside it, and runs a quick smoke test.
+
+> Why a venv? On Raspberry Pi OS Bookworm (and any recent Debian/Ubuntu), system-wide `pip install` is blocked by PEP 668 (`externally-managed-environment`). The venv is the supported way around it.
+
+Python deps installed by the script:
 
 - `pygame` — audio playback
 - `mfrc522` — RFID reader driver
 - `RPi.GPIO` — GPIO access
 - `python-vlc` — video playback
+
+**All subsequent `python3 …` commands below assume the venv.** Either prefix them with `.venv/bin/python3` or run `source .venv/bin/activate` once per shell.
+
+If you'd rather skip the script and do it manually:
+
+```bash
+sudo apt install -y python3-venv python3-pygame python3-rpi.gpio vlc
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements.txt
+```
 
 ### 6. Configure `base_path`
 
@@ -179,8 +193,10 @@ sudo raspi-config
 User=pi
 WorkingDirectory=/home/pi/fiabeSonore
 Environment=XAUTHORITY=/home/pi/.Xauthority
-ExecStart=/usr/bin/python3 /home/pi/fiabeSonore/rfidReader.py
+ExecStart=/home/pi/fiabeSonore/.venv/bin/python3 /home/pi/fiabeSonore/rfidReader.py
 ```
+
+`ExecStart` points at the venv interpreter created by `setup.sh`. If you installed dependencies system-wide instead, change it to `/usr/bin/python3`.
 
 Replace `pi` and the path with whatever your user and clone location actually are.
 
@@ -258,7 +274,8 @@ fiabeSonore/
 
 | Symptom | Likely cause |
 |---|---|
-| `ImportError: No module named RPi.GPIO` | Not running on a Pi, or dependencies not installed. Run `pip install -r requirements.txt`. |
+| `ImportError: No module named RPi.GPIO` | Not running on a Pi, or dependencies not installed. Run `./setup.sh` (or activate the venv: `source .venv/bin/activate`). |
+| `error: externally-managed-environment` | You ran `pip` against system Python on Bookworm. Use `./setup.sh` — it creates a venv that bypasses PEP 668. |
 | `No such file or directory: '/dev/spidev0.0'` | SPI not enabled. Run `sudo raspi-config` → Interface Options → SPI. |
 | `PermissionError` on the reader | User not in `spi` / `gpio` groups. Add them with `usermod -aG spi,gpio $USER` and log out/in. |
 | Service runs but no video window | Desktop autologin not enabled, or `DISPLAY` / `XAUTHORITY` in the unit file don't match your user. |
