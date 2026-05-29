@@ -279,7 +279,9 @@ fiabeSonore/
 | `No such file or directory: '/dev/spidev0.0'` | SPI not enabled. Run `sudo raspi-config` → Interface Options → SPI. |
 | `PermissionError` on the reader | User not in `spi` / `gpio` groups. Add them with `usermod -aG spi,gpio $USER` and log out/in. |
 | Service runs but no video window | Desktop autologin not enabled, or `DISPLAY` / `XAUTHORITY` in the unit file don't match your user. |
-| No audio | Wrong output device. Run `sudo raspi-config` → System Options → Audio → 3.5 mm jack. Check volume with `alsamixer`. |
+| No audio | Wrong output device. On Bookworm `raspi-config` is locked out — use the desktop volume taskbar, or `wpctl status` + `wpctl set-default <id>`. Check volume with `alsamixer`. |
+| Loud hiss on the 3.5 mm jack | Pi 3B's onboard analog audio is PWM-based and noisy. Try adding `audio_pwm_mode=2` to `/boot/firmware/config.txt`. If that doesn't help (often the case), the only real fix is a USB DAC — see the row below. |
+| USB DAC enumerates but is silent | C-Media chips (`lsusb` shows `0d8c:000e`) are mis-claimed by the kernel's `cm109` phone driver. `dmesg` shows repeated `cm109_urb_ctl_callback: urb status -32` and disconnect/reconnect loops. Blacklist the driver: create `/etc/modprobe.d/blacklist-cm109.conf` with `blacklist cm109` + `install cm109 /bin/true`, unplug+replug the DAC. Then `alsamixer -c <usb-card>` and unmute (`M`) the Speaker/PCM channels — they default to muted. Save with `sudo alsactl store <card>`. |
 | Card reads always empty | Card has not been programmed yet. Use `python3 program_card.py <filename>`. |
 
 ## Dev-machine note
